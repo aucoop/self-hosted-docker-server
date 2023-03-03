@@ -1,0 +1,55 @@
+version: '2'
+
+volumes:
+  nextcloud:
+  nextcloud_db:
+
+
+networks:
+  proxy:
+    external: true
+
+services:
+  nextcloud_db:
+    container_name: nextcloud_db
+    image: mariadb
+    restart: unless-stopped
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW --innodb-file-per-table=1 --skip-innodb-read-only-compressed
+    volumes:
+      - nextcloud_db:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PSSWD}
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+    networks:
+      - proxy
+
+  nextcloud:
+    image: nextcloud
+    restart: unless-stopped
+    container_name: nextcloud
+    ports:
+      - 8080:80
+    links:
+      - nextcloud_db
+    volumes:
+      - ./nextcloud_data/config:/var/www/html
+      - ./nextcloud_data/data:/var/www/html/data
+    environment:
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - MYSQL_HOST=nextcloud_db
+      - REDIS_HOST=redis
+    networks:
+      - proxy
+
+  redis:
+    image: redis:alpine
+    container_name: nextcloud_redis
+    volumes:
+      - /docker/nextcloud/redis:/data
+    networks:
+      - proxy
+    restart: unless-stopped

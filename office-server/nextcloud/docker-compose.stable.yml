@@ -1,0 +1,68 @@
+version: '3'
+
+services:
+
+  nextcloud_db:
+    image: ghcr.io/linuxserver/mariadb
+    container_name: nextcloud_db
+    networks:
+      - proxy
+    environment:
+      # - PUID=1000
+      # - PGID=1000
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PSSWD}
+      - TZ=Africa/Dakar
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - ./nextcloud_data/data/config:/config
+    restart: unless-stopped
+
+  nextcloud:
+    image: nextcloud:25.0.3
+    container_name: nextcloud
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.nextcloud.entrypoints=http"
+      - "traefik.http.middlewares.nextcloud-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.nextcloud.middlewares=nextcloud-https-redirect"
+      - "traefik.http.routers.nextcloud-secure.entrypoints=https"
+      - "traefik.http.routers.nextcloud-secure.rule=Host(`cloud.intranet-hahatay.org`)"
+      - "traefik.http.routers.nextcloud-secure.tls=true"
+      - "traefik.http.routers.nextcloud-secure.service=nextcloud"
+      - "traefik.http.routers.nextcloud.rule=Host(`cloud.intranet-hahatay.org`)"
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.nextcloud-redirectregex.redirectRegex.permanent=true"
+      - "traefik.http.middlewares.nextcloud-redirectregex.redirectregex.regex=^https://(.*)/.well-known/(card|cal)dav"
+      - "traefik.http.middlewares.nextcloud-redirectregex.redirectregex.replacement=https://$$1/remote.php/dav/"
+      - "traefik.http.routers.nextcloud.middlewares=nextcloud-redirectregex@docker"
+      - "traefik.frontend.headers.STSSeconds=15552000"
+
+    restart: unless-stopped
+    ports:
+      - 8000:80
+    depends_on:
+      - nextcloud_db
+    volumes:
+      - ./nextcloud_data/data/config:/config
+      - ./nextcloud_data/data/data:/data
+    environment:
+      - TZ=Africa/Dakar
+      - OVERWRITEPROTOCOL=https
+        #      - REDIS_HOST=redis
+
+        #  redis:
+        #image: redis:alpine
+        #networks:
+        #- proxy
+        #volumes:
+        #- ./data/runtime/nextcloud/redis:/data
+
+
+networks:
+  proxy:
+    external: true
